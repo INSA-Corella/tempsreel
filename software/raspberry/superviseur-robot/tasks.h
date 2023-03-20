@@ -76,6 +76,7 @@ private:
     RT_TASK th_openComRobot;
     RT_TASK th_startRobot;
     RT_TASK th_move;
+    RT_TASK th_openBat;
     
     /**********************************************************************/
     /* Mutex                                                              */
@@ -148,7 +149,8 @@ private:
      * @return Message read
      */
     Message *ReadInQueue(RT_QUEUE *queue);
-
+    
+    void OpenBat();
 };
 
 #endif // __TASKS_H__ 

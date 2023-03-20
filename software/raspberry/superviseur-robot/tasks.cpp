@@ -22,6 +22,7 @@
 #define PRIORITY_TSERVER 30
 #define PRIORITY_TOPENCOMROBOT 20
 #define PRIORITY_TMOVE 20
+#define PRIORITY_TBAT 10
 #define PRIORITY_TSENDTOMON 22
 #define PRIORITY_TRECEIVEFROMMON 25
 #define PRIORITY_TSTARTROBOT 20
@@ -103,6 +104,7 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    
     if (err = rt_task_create(&th_sendToMon, "th_sendToMon", 0, PRIORITY_TSENDTOMON, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
@@ -120,6 +122,10 @@ void Tasks::Init() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_create(&th_move, "th_move", 0, PRIORITY_TMOVE, 0)) {
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_openBat, "th_openBat", 0, PRIORITY_TBAT, 0)) {//petite prio car pas critique
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -164,6 +170,10 @@ void Tasks::Run() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_move, (void(*)(void*)) & Tasks::MoveTask, this)) {
+        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_start(&th_move, (void(*)(void*)) & Tasks::OpenBat, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -415,3 +425,29 @@ Message *Tasks::ReadInQueue(RT_QUEUE *queue) {
     return msg;
 }
 
+
+
+void Tasks::OpenBat(){
+    
+    int bat;
+    Message batMsg;
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+    //task starts
+    rt_task_set_periodic(NULL, TM_NOW, 500000);
+    //faire while 1 avec waitPeriod
+    //get battery level
+    rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+    batMsg=robot.Write(new Message((MessageID)DMB_GET_VBAT));
+    rt_mutex_release(&mutex_robot);
+    
+    
+    
+    //montre le cout
+    cout << " move: " << batMsg;
+    
+    
+    //send the bat
+    WriteInQueue(&q_messageToMon, batMsg);
+    
+    
+}
