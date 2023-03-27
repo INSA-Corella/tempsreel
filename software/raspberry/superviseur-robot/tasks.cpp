@@ -23,6 +23,9 @@
 #define PRIORITY_TOPENCOMROBOT 20
 #define PRIORITY_TMOVE 20
 #define PRIORITY_TBAT 10
+#define PRIORITY_TCAM 10
+#define PRIORITY_TCAMIMG 20
+
 #define PRIORITY_TSENDTOMON 22
 #define PRIORITY_TRECEIVEFROMMON 25
 #define PRIORITY_TSTARTROBOT 20
@@ -129,6 +132,18 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_create(&th_openCam, "th_openCam", 0, PRIORITY_TCAM, 0)) {//petite prio car pas critique
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_closeCam, "th_closeCam", 0, PRIORITY_TCAM, 0)) {//petite prio car pas critique
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_getImgCam, "th_getImgCam", 0, PRIORITY_TCAMIMG, 0)) {//petite prio car pas critique
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     cout << "Tasks created successfully" << endl << flush;
 
     /**************************************************************************************/
@@ -173,10 +188,18 @@ void Tasks::Run() {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-    if (err = rt_task_start(&th_move, (void(*)(void*)) & Tasks::OpenBat, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
-        exit(EXIT_FAILURE);
-    }
+    /***if (err = rt_task_start(&th_openBat, (void(*)(void*)) & Tasks::OpenBat, this)) {
+    *    cerr << "Error task start: " << strerror(-err) << endl << flush;
+    *    exit(EXIT_FAILURE);
+    *}
+    *if (err = rt_task_start(&th_openCam, (void(*)(void*)) & Tasks::OpenCam, this)) {
+    *    cerr << "Error task start: " << strerror(-err) << endl << flush;
+    *    exit(EXIT_FAILURE);
+    *}
+    *if (err = rt_task_start(&th_closeCam, (void(*)(void*)) & Tasks::CloseCam, this)) {
+    *    cerr << "Error task start: " << strerror(-err) << endl << flush;
+    *    exit(EXIT_FAILURE);
+    }***/
 
     cout << "Tasks launched" << endl << flush;
 }
@@ -187,6 +210,7 @@ void Tasks::Run() {
 void Tasks::Stop() {
     monitor.Close();
     robot.Close();
+    CloseCam();
 }
 
 /**
@@ -285,6 +309,12 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
             move = msgRcv->GetID();
             rt_mutex_release(&mutex_move);
+        }else if(msgRcv->CompareID(MESSAGE_CAM_OPEN)){
+            OpenCam();
+        }else if(msgRcv->CompareID(MESSAGE_CAM_CLOSE)){
+            CloseCam();
+        }else if(msgRcv->CompareID(MESSAGE_ROBOT_BATTERY_GET)){
+            OpenBat();
         }
         delete(msgRcv); // mus be deleted manually, no consumer
     }
@@ -428,26 +458,115 @@ Message *Tasks::ReadInQueue(RT_QUEUE *queue) {
 
 
 void Tasks::OpenBat(){
-    
+    //declaration
     int bat;
-    Message batMsg;
+    int rs;
+    Message * batMsg;
+    
+    
     rt_sem_p(&sem_barrier, TM_INFINITE);
-    //task starts
+    //init la periode 
     rt_task_set_periodic(NULL, TM_NOW, 500000);
     //faire while 1 avec waitPeriod
-    //get battery level
-    rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-    batMsg=robot.Write(new Message((MessageID)DMB_GET_VBAT));
-    rt_mutex_release(&mutex_robot);
+    while(1){
+        //attend la periode donné 2 ligne plus haut
+        rt_task_wait_period(NULL);
+        
+        //verify that the connection to the robot started
+        rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+        rs = robotStarted;
+        rt_mutex_release(&mutex_robotStarted);
+        
+        if (rs == 1) {
+            
+            //get battery level
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            batMsg=robot.Write(new Message((MessageID)MESSAGE_ROBOT_BATTERY_GET));
+            rt_mutex_release(&mutex_robot);
+            
+            
+             //montre le cout : debug
+            cout << " move: " << (*batMsg).ToString() << endl << flush;
+
+            //send the bat
+            WriteInQueue(&q_messageToMon, batMsg);
+        }
+    }
+}
     
     
     
-    //montre le cout
-    cout << " move: " << batMsg;
     
     
-    //send the bat
-    WriteInQueue(&q_messageToMon, batMsg);
+void Tasks::OpenCam(){
+    //declaration
+    Message * camMsg;
     
     
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+      
+    //open camera 
+    
+    //init cam
+    camera= new Camera(sm,5);
+    
+    //open cam
+    (*camera).Open();
+            
+    //debug
+    cout << " CAM OPEN ? : " << (*camera).IsOpen() << endl << flush;
+    
+    if (err = rt_task_start(&th_getImgCam, (void(*)(void*)) & Tasks::getImgCam, this)) {
+        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+
+}
+
+void Tasks::CloseCam(){
+    //declaration
+    Message * camMsg;
+    
+    
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+     
+    
+    //close cam
+    (*camera).Close();
+            
+    //debug
+    cout << " CAM closed ? : " << (*camera).IsOpen() << endl << flush;
+
+}
+
+void Tasks::getImgCam(){
+    //declaration
+    Img img;
+    
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+    
+    rt_task_set_periodic(NULL, TM_NOW, 100000);
+    while(1){
+        //attend la periode donné 2 ligne plus haut
+        rt_task_wait_period(NULL);
+        
+        //get image cam
+        img=(*camera).Grab();
+        
+        //create msg 
+        
+        MessageImg  msgImg=new MessageImg(MESSAGE_CAM_IMAGE,&img);
+        
+        msgImg.SetImage(&img);
+        //send img to monitor
+        WriteInQueue(&q_messageToMon, &msgImg);
+        
+        //debug
+        cout << " image sent: " << endl << flush;
+    }
+    
+     
+            
+    
+
 }

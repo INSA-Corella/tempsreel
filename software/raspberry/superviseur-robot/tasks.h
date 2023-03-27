@@ -64,6 +64,7 @@ private:
     /**********************************************************************/
     ComMonitor monitor;
     ComRobot robot;
+    Camera * camera;
     int robotStarted = 0;
     int move = MESSAGE_ROBOT_STOP;
     
@@ -77,6 +78,10 @@ private:
     RT_TASK th_startRobot;
     RT_TASK th_move;
     RT_TASK th_openBat;
+    RT_TASK th_openCam;
+    RT_TASK th_closeCam;
+    RT_TASK th_getImgCam;
+
     
     /**********************************************************************/
     /* Mutex                                                              */
@@ -151,6 +156,12 @@ private:
     Message *ReadInQueue(RT_QUEUE *queue);
     
     void OpenBat();
+    
+    void OpenCam();
+    void CloseCam();    
+    void getImgCam();
+
+
 };
 
 #endif // __TASKS_H__ 
