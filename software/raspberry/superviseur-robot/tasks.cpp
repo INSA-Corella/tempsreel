@@ -464,7 +464,7 @@ void Tasks::OpenBat(){
     Message * batMsg;
     
     
-    rt_sem_p(&sem_barrier, TM_INFINITE);
+    rt_sem_p(&sem_barrier, TM_INFINITE);//sem pour revenir au run
     //init la periode 
     rt_task_set_periodic(NULL, TM_NOW, 500000);
     //faire while 1 avec waitPeriod
@@ -501,9 +501,8 @@ void Tasks::OpenBat(){
 void Tasks::OpenCam(){
     //declaration
     Message * camMsg;
+    int err;
     
-    
-    rt_sem_p(&sem_barrier, TM_INFINITE);
       
     //open camera 
     
@@ -528,8 +527,6 @@ void Tasks::CloseCam(){
     Message * camMsg;
     
     
-    rt_sem_p(&sem_barrier, TM_INFINITE);
-     
     
     //close cam
     (*camera).Close();
@@ -541,9 +538,8 @@ void Tasks::CloseCam(){
 
 void Tasks::getImgCam(){
     //declaration
-    Img img;
     
-    rt_sem_p(&sem_barrier, TM_INFINITE);
+    //rt_sem_p(&sem_barrier, TM_INFINITE);
     
     rt_task_set_periodic(NULL, TM_NOW, 100000);
     while(1){
@@ -551,15 +547,16 @@ void Tasks::getImgCam(){
         rt_task_wait_period(NULL);
         
         //get image cam
-        img=(*camera).Grab();
+        
+        Img img=(*camera).Grab();
         
         //create msg 
         
-        MessageImg  msgImg=new MessageImg(MESSAGE_CAM_IMAGE,&img);
+        MessageImg * msgImg=new MessageImg(MESSAGE_CAM_IMAGE,&img);
         
-        msgImg.SetImage(&img);
+        (*msgImg).SetImage(&img);
         //send img to monitor
-        WriteInQueue(&q_messageToMon, &msgImg);
+        WriteInQueue(&q_messageToMon, msgImg);
         
         //debug
         cout << " image sent: " << endl << flush;
