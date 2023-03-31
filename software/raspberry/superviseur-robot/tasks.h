@@ -81,6 +81,9 @@ private:
     RT_TASK th_openCam;
     RT_TASK th_closeCam;
     RT_TASK th_getImgCam;
+    RT_TASK th_findArena;
+    RT_TASK th_calcPos;
+    RT_TASK th_stopCalcPos;
 
     
     /**********************************************************************/
@@ -88,6 +91,7 @@ private:
     /**********************************************************************/
     RT_MUTEX mutex_monitor;
     RT_MUTEX mutex_robot;
+    RT_MUTEX mutex_cam;
     RT_MUTEX mutex_robotStarted;
     RT_MUTEX mutex_move;
 
@@ -160,7 +164,9 @@ private:
     void OpenCam();
     void CloseCam();    
     void getImgCam();
-
+    void findArena();
+    void CalcPos();
+    void stopCalcPos();
 
 };
 

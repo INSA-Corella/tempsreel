@@ -23,13 +23,16 @@
 #define PRIORITY_TOPENCOMROBOT 20
 #define PRIORITY_TMOVE 20
 #define PRIORITY_TBAT 10
-#define PRIORITY_TCAM 10
+#define PRIORITY_TCAM 20
 #define PRIORITY_TCAMIMG 20
 
 #define PRIORITY_TSENDTOMON 22
 #define PRIORITY_TRECEIVEFROMMON 25
 #define PRIORITY_TSTARTROBOT 20
 #define PRIORITY_TCAMERA 21
+#define PRIORITY_TFINDARENA 20//a changer
+#define PRIORITY_TCALCPOS 20 //a changer
+#define PRIORITY_TSTOPCALC 20 //a changer
 
 /*
  * Some remarks:
@@ -74,6 +77,10 @@ void Tasks::Init() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_mutex_create(&mutex_move, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_mutex_create(&mutex_cam, NULL)) {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -141,6 +148,18 @@ void Tasks::Init() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_create(&th_getImgCam, "th_getImgCam", 0, PRIORITY_TCAMIMG, 0)) {//petite prio car pas critique
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_findArena, "th_findArena", 0, PRIORITY_TFINDARENA, 0)) {//petite prio car pas critique
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_calcPos, "th_calcPos", 0, PRIORITY_TCALCPOS, 0)) {//petite prio car pas critique
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_create(&th_stopCalcPos, "th_stopCalcPos", 0, PRIORITY_TSTOPCALC, 0)) {//petite prio car pas critique
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -315,6 +334,12 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             CloseCam();
         }else if(msgRcv->CompareID(MESSAGE_ROBOT_BATTERY_GET)){
             OpenBat();
+        }else if(msgRcv->CompareID(MESSAGE_CAM_ASK_ARENA)){
+            findArena();
+        }else if(msgRcv->CompareID(MESSAGE_CAM_POSITION_COMPUTE_START)){
+            CalcPos();
+        }else if(msgRcv->CompareID(MESSAGE_CAM_POSITION_COMPUTE_STOP )){
+            stopCalcPos();
         }
         delete(msgRcv); // mus be deleted manually, no consumer
     }
@@ -519,7 +544,8 @@ void Tasks::OpenCam(){
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
-
+    
+    
 }
 
 void Tasks::CloseCam(){
@@ -536,24 +562,44 @@ void Tasks::CloseCam(){
 
 }
 
+Arena arenaSave;
+bool arenaSaved=false;
+
 void Tasks::getImgCam(){
     //declaration
     
     //rt_sem_p(&sem_barrier, TM_INFINITE);
     
-    rt_task_set_periodic(NULL, TM_NOW, 100000);
+    rt_task_set_periodic(NULL, TM_NOW, 100000000);
     while(1){
         //attend la periode donné 2 ligne plus haut
         rt_task_wait_period(NULL);
         
         //get image cam
         
+        rt_mutex_acquire(&mutex_cam, TM_INFINITE);
         Img img=(*camera).Grab();
+        
+        rt_mutex_release(&mutex_cam);
+        Arena arena= img.SearchArena();
+        
+        if(arena.IsEmpty()){//arena pas trouvée
+            //Message * msg=new Message((MessageID)MESSAGE_ANSWER_NACK);
+            
+            cout << " pas d'arene trouvée: " << endl << flush;
+            //WriteInQueue(&q_messageToMon, msg);
+        }else{
+            //img.DrawArena(arena);
+            cout << " ############################ ############################ arene trouvée et dessinée ############################ ############################ : " << endl << flush;
+        }
         
         //create msg 
         
         MessageImg * msgImg=new MessageImg(MESSAGE_CAM_IMAGE,&img);
         
+        if(arenaSaved){
+            img.DrawArena(arenaSave);
+        }
         (*msgImg).SetImage(&img);
         //send img to monitor
         WriteInQueue(&q_messageToMon, msgImg);
@@ -561,9 +607,87 @@ void Tasks::getImgCam(){
         //debug
         cout << " image sent: " << endl << flush;
     }
-    
-     
-            
+}
     
 
-}
+    void Tasks::findArena(){
+        //declaration
+
+        //rt_mutex_acquire(&mutex_cam, TM_INFINITE);
+        /*Img img=(*camera).Grab(); // Grab() takes times 
+        Arena arena= img.SearchArena();
+        
+        if(arena.IsEmpty()){//arena pas trouvée
+            Message * msg=new Message((MessageID)MESSAGE_ANSWER_NACK);
+            
+            cout << " pas d'arene trouvée: " << endl << flush;
+            WriteInQueue(&q_messageToMon, msg);
+        }else{
+            img.DrawArena(arena);
+            cout << " arene trouvée et dessinée : " << endl << flush;
+            //create msg with border drawn
+            MessageImg * msgImg=new MessageImg(MESSAGE_CAM_IMAGE,&img);
+
+            (*msgImg).SetImage(&img);
+            //send img to monitor
+            WriteInQueue(&q_messageToMon, msgImg);
+            
+            
+            Message * msgRcv = monitor.Read();
+            cout << "Rcv <= " << msgRcv->ToString() << endl << flush;
+            
+            if(msgRcv->CompareID(MESSAGE_CAM_ARENA_CONFIRM)){
+                arenaSave=arena;
+                arenaSaved=true;
+            }else if(msgRcv->CompareID(MESSAGE_CAM_ARENA_INFIRM)){
+                arenaSaved=false;
+            }
+        
+        }*/
+       //rt_mutex_release(&mutex_cam);
+    }
+     
+    
+    void Tasks::CalcPos(){
+        //debug
+        cout << " calcul de la pos sent: " << endl << flush;
+        /*rt_mutex_acquire(&mutex_cam, TM_INFINITE);
+        Img img=(*camera).Grab(); // Grab() takes times 
+        rt_mutex_release(&mutex_cam);
+        Arena arena= img.SearchRobot();
+        
+        if(arena.IsEmpty()){//arena pas trouvée
+            Message * msg=new Message((MessageID)MESSAGE_ANSWER_NACK);
+            
+            cout << " pas d'arene trouvée: " << endl << flush;
+            WriteInQueue(&q_messageToMon, msg);
+        }else{
+            img.DrawArena(arena);
+            cout << " arene trouvée et dessinée : " << endl << flush;
+            //create msg with border drawn
+            MessageImg * msgImg=new MessageImg(MESSAGE_CAM_IMAGE,&img);
+
+            (*msgImg).SetImage(&img);
+            //send img to monitor
+            WriteInQueue(&q_messageToMon, msgImg);
+            
+            
+            Message * msgRcv = monitor.Read();
+            cout << "Rcv <= " << msgRcv->ToString() << endl << flush;
+            
+            if(msgRcv->CompareID(MESSAGE_CAM_ARENA_CONFIRM)){
+                arenaSave=arena;
+                arenaSaved=true;
+            }else if(msgRcv->CompareID(MESSAGE_CAM_ARENA_INFIRM)){
+                arenaSaved=false;
+            }
+        
+        }*/
+    }
+    void Tasks::stopCalcPos(){
+        cout << " on stop le calc de la position: " << endl << flush;
+        
+    }
+    
+
+
