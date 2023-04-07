@@ -94,6 +94,7 @@ private:
     RT_MUTEX mutex_cam;
     RT_MUTEX mutex_robotStarted;
     RT_MUTEX mutex_move;
+    RT_MUTEX mutex_cpterr;
 
     /**********************************************************************/
     /* Semaphores                                                         */
@@ -141,6 +142,7 @@ private:
      * @brief Thread handling control of the robot.
      */
     void MoveTask(void *arg);
+    void testError(int msgID);
     
     /**********************************************************************/
     /* Queue services                                                     */
