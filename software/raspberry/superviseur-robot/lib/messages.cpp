@@ -497,7 +497,7 @@ void MessagePosition::SetID(MessageID id) {
  * Set position
  * @param pos Reference to position
  */
-void MessagePosition::SetPosition(Position& pos) {
+void MessagePosition::SetPosition(Position &pos) {
     this->pos.angle = pos.angle;
     this->pos.robotId = pos.robotId;
     this->pos.center = pos.center;

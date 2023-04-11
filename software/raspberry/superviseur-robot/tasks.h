@@ -91,10 +91,13 @@ private:
     /**********************************************************************/
     RT_MUTEX mutex_monitor;
     RT_MUTEX mutex_robot;
+    RT_MUTEX mutex_bat;
     RT_MUTEX mutex_cam;
     RT_MUTEX mutex_robotStarted;
     RT_MUTEX mutex_move;
     RT_MUTEX mutex_cpterr;
+    RT_MUTEX mutex_arenaSaved;
+    RT_MUTEX mutex_calculatePos;
 
     /**********************************************************************/
     /* Semaphores                                                         */
@@ -143,7 +146,7 @@ private:
      */
     void MoveTask(void *arg);
     void testError(int msgID);
-    
+    void close_communication_robot();
     /**********************************************************************/
     /* Queue services                                                     */
     /**********************************************************************/
@@ -167,8 +170,7 @@ private:
     void CloseCam();    
     void getImgCam();
     void findArena();
-    void CalcPos();
-    void stopCalcPos();
+    void CalcPos(Img * img);
 
 };
 
